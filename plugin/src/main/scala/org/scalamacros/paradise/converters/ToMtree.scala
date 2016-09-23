@@ -300,6 +300,9 @@ trait ToMtree extends Enrichments
                 val mwithin = lwithin.toMtree[m.Name.Qualifier]
                 m.Mod.Protected(mwithin)
 
+              case l.Inline() =>
+                m.Mod.Inline()
+
               case l.Implicit() =>
                 m.Mod.Implicit()
 

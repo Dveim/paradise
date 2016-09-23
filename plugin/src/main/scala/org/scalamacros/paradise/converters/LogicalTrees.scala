@@ -667,6 +667,7 @@ trait LogicalTrees { self: ConvertersToolkit =>
     trait Modifier extends Tree
     case class Private(within: g.Tree) extends Modifier // TODO: `within: l.QualifierName`
     case class Protected(within: g.Tree) extends Modifier // TODO: `within: l.QualifierName`
+    case class Inline() extends Modifier
     case class Implicit() extends Modifier
     case class Final() extends Modifier
     case class Sealed() extends Modifier
@@ -781,12 +782,18 @@ trait LogicalTrees { self: ConvertersToolkit =>
       }
     }
 
-    private def aggregateAnnotations(mdef: g.MemberDef): List[l.Annotation] = {
+    private def aggregateAnnotations(mdef: g.MemberDef): List[l.Modifier] = {
       val syntacticAnnots = mdef.mods.annotations
       val semanticAnnots = mdef.symbol.annotations
       require(syntacticAnnots.isEmpty || semanticAnnots.isEmpty)
-      if (syntacticAnnots.nonEmpty) syntacticAnnots.map(Annotation.apply)
-      else semanticAnnots.map(Annotation.apply)
+      val annots = if (syntacticAnnots.nonEmpty) syntacticAnnots.map(Annotation.apply)
+                   else semanticAnnots.map(Annotation.apply)
+      annots.map {
+        case Annotation(g.Apply(g.Select(g.New(g.TypeTree()), g.termNames.CONSTRUCTOR), Nil)) =>
+          // todo check with mods.annotations.exists(_.equalsStructure(g.New(paradiseDefinitions.MetaInlineClass))) ???
+          l.Inline()
+        case x => x
+      }
     }
 
     case class Annotation(tree: g.Tree) extends Modifier
