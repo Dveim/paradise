@@ -22,8 +22,9 @@ import scala.{meta => m}
 // that is capable of merging syntactically precise trees (obtained from parsing)
 // and semantically precise trees (obtain from converting).
 
-trait ToMtree extends Enrichments
-              with ConvertersToolkit { self =>
+trait ToMtree {
+  self: Converter =>
+
   protected implicit class XtensionGtreeToMtree(gtree: g.Tree) {
     def toMtree[T <: m.Tree : ClassTag]: T = self.toMtree[T](gtree)
   }
@@ -61,7 +62,7 @@ trait ToMtree extends Enrichments
 
               case l.TermApply(lfun, largs) if !termSelectContainsConstructor(lfun) =>
                 val mfun = lfun.toMtree[m.Term]
-                val margs = largs.toMtrees[m.Term]
+                val margs = largs.toMtrees[m.Term.Arg]
                 m.Term.Apply(mfun, margs)
 
               case l.TermApplyType(lfun, ltargs) =>
@@ -103,12 +104,12 @@ trait ToMtree extends Enrichments
                 val mtempl = ltempl.toMtree[m.Template]
                 m.Term.New(mtempl)
 
-              case l.TermArg(l.TermArg.Named(lname, lrhs)) =>
+              case l.TermArg.Named(lname, lrhs) =>
                 val mname = lname.toMtree[m.Term.Name]
                 val mrhs = lrhs.toMtree[m.Term.Arg]
                 m.Term.Arg.Named(mname, mrhs)
 
-              case l.TermArg(l.TermArg.Repeated(lident)) =>
+              case l.TermArg.Repeated(lident) =>
                 val mterm = lident.toMtree[m.Term]
                 m.Term.Arg.Repeated(mterm)
 
@@ -164,6 +165,11 @@ trait ToMtree extends Enrichments
                 val mlhs = llhs.toMtree[m.Pat.Var.Term]
                 val mrhs = lrhs.toMtree[m.Pat.Arg]
                 m.Pat.Bind(mlhs, mrhs)
+
+              case l.PatAlternative(llhs, lrhs) =>
+                val mllhs = llhs.toMtree[m.Pat]
+                val mlrhs = lrhs.toMtree[m.Pat]
+                m.Pat.Alternative(mllhs, mlrhs)
 
               case l.PatExtract(lref, ltargs, largs) =>
                 val mref = lref.toMtree[m.Term.Ref]

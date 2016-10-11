@@ -1,5 +1,5 @@
 package org.scalameta.paradise
-package converters
+package reflect
 
 import scala.tools.nsc.Global
 import scala.reflect.internal.{Flags, HasFlags}
@@ -11,7 +11,8 @@ import org.scalameta.adt._
 import org.scalameta.roles._
 import org.scalameta.debug
 
-trait LogicalTrees { self: ConvertersToolkit =>
+trait LogicalTrees {
+  self: ReflectToolkit =>
 
   import global.{require => _, abort => _, _}
   import definitions._
@@ -242,14 +243,19 @@ trait LogicalTrees { self: ConvertersToolkit =>
       }
     }
 
-    sealed trait TermArg
     object TermArg {
-      case class Named(name: g.Tree, rhs: g.Tree) extends TermArg
-      case class Repeated(arg: g.Ident) extends TermArg
-      def unapply(tree: g.Tree): Option[l.TermArg] = tree match {
-        case g.AssignOrNamedArg(lhs, rhs) => Some(l.TermArg.Named(lhs, rhs))
-        case g.Typed(ident: g.Ident, g.Ident(g.typeNames.WILDCARD_STAR)) => Some(l.TermArg.Repeated(ident))
-        case _ => None
+      object Named {
+        def unapply(tree: g.Tree): Option[(g.Tree, g.Tree)] = tree match {
+          case g.AssignOrNamedArg(lhs, rhs) => Some((lhs, rhs))
+          case _ => None
+        }
+      }
+
+      object Repeated {
+        def unapply(tree: g.Tree): Option[g.Ident] = tree match {
+          case g.Typed(ident: g.Ident, g.Ident(g.typeNames.WILDCARD_STAR)) => Some(ident)
+          case _ => None
+        }
       }
     }
 
@@ -356,6 +362,19 @@ trait LogicalTrees { self: ConvertersToolkit =>
         val g.Bind(name, body) = tree
         val llhs = l.PatVarTerm(tree)
         val lrhs = body.set(PatLoc)
+        Some((llhs, lrhs))
+      }
+    }
+
+    object PatAlternative {
+      def unapply(tree: g.Alternative): Option[(g.Tree, g.Tree)] = {
+        val g.Alternative(head :: tail) = tree
+        val llhs = head
+        val lrhs = tail match {
+          case Nil => return None
+          case head :: Nil => head
+          case trees @ (head :: tail) => g.Alternative(trees)
+        }
         Some((llhs, lrhs))
       }
     }
@@ -891,7 +910,7 @@ trait LogicalTrees { self: ConvertersToolkit =>
       val hasImplicits = last.exists(_.mods.hasFlag(IMPLICIT))
       val explicitss = if (hasImplicits) init else init :+ last
       val implicits = if (hasImplicits) last else Nil
-      val limplicits = implicits.filter(_.name.startsWith(nme.EVIDENCE_PARAM_PREFIX))
+      val limplicits = implicits.filter(!_.name.startsWith(nme.EVIDENCE_PARAM_PREFIX))
       val lparamss = if (limplicits.nonEmpty) explicitss :+ limplicits else explicitss
       lparamss.map(_.map(_.set(TermParamRole)))
     }
